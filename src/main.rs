@@ -115,9 +115,11 @@ fn main() {
     };
     
     let mut keys_pressed = std::collections::HashSet::new();
-    let start_time = std::time::Instant::now();
-    let mut last_frame = start_time;
+    let mut last_frame = std::time::Instant::now(); // Initialized here
     let mut game_over = false;
+    let mut paused = false;
+    let mut p_key_was_pressed = false;
+    let mut total_time_elapsed = 0.0f32;
 
     let _ = event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);
@@ -135,6 +137,11 @@ fn main() {
                      match state {
                         winit::event::ElementState::Pressed => { 
                             keys_pressed.insert(keycode); 
+                            if keycode == KeyCode::KeyP && !p_key_was_pressed {
+                                paused = !paused;
+                                p_key_was_pressed = true;
+                                println!("Game Paused: {}", paused);
+                            }
                             if game_over && keycode == KeyCode::KeyR {
                                 game_over = false;
                                 player.pos = glam::Vec3::new(0.0, 40.0, 0.0);
@@ -142,16 +149,32 @@ fn main() {
                                 player.pitch = 0.0;
                                 player.roll = 0.0;
                                 player.speed = 25.0;
+                                paused = false; 
                             }
                         }
-                        winit::event::ElementState::Released => { keys_pressed.remove(&keycode); }
+                        winit::event::ElementState::Released => { 
+                            keys_pressed.remove(&keycode); 
+                            if keycode == KeyCode::KeyP {
+                                p_key_was_pressed = false;
+                            }
+                        }
                     }
                 }
                 WindowEvent::RedrawRequested => {
                     let now = std::time::Instant::now();
-                    let dt = (now - last_frame).as_secs_f32();
-                    let total_time = (now - start_time).as_secs_f32();
+                    let dt_duration = now.duration_since(last_frame);
+                    let dt = if paused { 0.0 } else { dt_duration.as_secs_f32() };
+                    
+                    // Only update last_frame if we processed time, OR keep it updating?
+                    // If we pause, 'now' keeps advancing. 
+                    // Correct logic: 'last_frame' tracks real time. 
+                    // 'total_time_elapsed' tracks game time.
                     last_frame = now;
+
+                    if !paused {
+                        total_time_elapsed += dt;
+                    }
+                    let total_time = total_time_elapsed;
 
                     // --- Day/Night Cycle ---
                     let cycle_duration = 60.0;
@@ -163,7 +186,7 @@ fn main() {
                          0.2              // Z - Slight tilt
                     ).normalize();
 
-                    if !game_over {
+                    if !game_over && !paused {
                         let turn_speed = 2.0 * dt;
                         let mut target_roll = 0.0;
                         
