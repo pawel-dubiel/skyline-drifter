@@ -1,0 +1,12 @@
+[package]
+name = "skyscraper_flyer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.29"
+glutin = "0.31"
+glutin-winit = "0.4"
+gl = "0.14"
+glam = "0.25"
+raw-window-handle = "0.5"

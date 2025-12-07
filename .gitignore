@@ -1,0 +1,20 @@
+# Rust
+target/
+**/*.rs.bk
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Dependencies
+# A `Cargo.lock` file is often committed for applications to ensure
+# reproducible builds, but not always for libraries.
+# For this project, we'll commit it.
+# Cargo.lock
+
+# OS-specific
+.DS_Store
+Thumbs.db
