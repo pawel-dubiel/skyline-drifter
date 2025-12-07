@@ -2,6 +2,7 @@ mod shaders;
 mod gl_utils;
 mod world;
 mod player;
+mod universe;
 
 use glutin::{
     config::{ConfigTemplateBuilder, GlConfig},
@@ -24,6 +25,7 @@ use crate::player::Player;
 use crate::world::{GRID_SPACING, BUILDING_WIDTH, GROUND_LEVEL, MAX_BUILDING_HEIGHT, get_building_info, check_collision};
 use crate::gl_utils::{compile_shader, link_program};
 use crate::shaders::{SKY_VERTEX_SHADER, SKY_FRAGMENT_SHADER, SCENE_VERTEX_SHADER, SCENE_FRAGMENT_SHADER};
+use crate::universe::Universe;
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
@@ -114,12 +116,15 @@ fn main() {
         speed: 25.0,
     };
     
+    let mut universe = Universe::new();
+    
     let mut keys_pressed = std::collections::HashSet::new();
-    let mut last_frame = std::time::Instant::now(); // Initialized here
+    let start_time = std::time::Instant::now(); 
+    let mut last_frame = start_time;
     let mut game_over = false;
-    let mut paused = false;
-    let mut p_key_was_pressed = false;
-    let mut total_time_elapsed = 0.0f32;
+    let mut paused = false; 
+    let mut p_key_was_pressed = false; 
+    let mut total_time_elapsed = 0.0; 
 
     let _ = event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);
@@ -162,31 +167,20 @@ fn main() {
                 }
                 WindowEvent::RedrawRequested => {
                     let now = std::time::Instant::now();
-                    let dt_duration = now.duration_since(last_frame);
-                    let dt = if paused { 0.0 } else { dt_duration.as_secs_f32() };
+                    let dt = now.duration_since(last_frame).as_secs_f32();
+                    last_frame = now; 
                     
-                    // Only update last_frame if we processed time, OR keep it updating?
-                    // If we pause, 'now' keeps advancing. 
-                    // Correct logic: 'last_frame' tracks real time. 
-                    // 'total_time_elapsed' tracks game time.
-                    last_frame = now;
-
                     if !paused {
                         total_time_elapsed += dt;
+                        // Step Universe (1440x speedup: 1 min = 1 day)
+                        universe.step(dt as f64 * 1440.0);
                     }
-                    let total_time = total_time_elapsed;
+                    let total_time = total_time_elapsed; 
+                    
+                    // Get Celestial positions from Physics Universe
+                    let (sun_dir, moon_dir) = universe.get_sky_state();
 
-                    // --- Day/Night Cycle ---
-                    let cycle_duration = 60.0;
-                    let day_progress = (total_time % cycle_duration) / cycle_duration;
-                    let sun_angle = day_progress * std::f32::consts::TAU;
-                    let sun_dir = glam::Vec3::new(
-                         sun_angle.cos(), // X
-                         sun_angle.sin(), // Y - Height
-                         0.2              // Z - Slight tilt
-                    ).normalize();
-
-                    if !game_over && !paused {
+                    if !game_over && !paused { 
                         let turn_speed = 2.0 * dt;
                         let mut target_roll = 0.0;
                         
@@ -245,12 +239,14 @@ fn main() {
                         let s_view_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"view\0").unwrap().as_ptr());
                         let s_proj_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"projection\0").unwrap().as_ptr());
                         let s_sun_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"uSunDir\0").unwrap().as_ptr());
+                        let s_moon_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"uMoonDir\0").unwrap().as_ptr());
                         let s_time_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"uTime\0").unwrap().as_ptr());
                         let s_cam_loc = gl::GetUniformLocation(sky_program, CStr::from_bytes_with_nul(b"uCameraPos\0").unwrap().as_ptr());
 
                         gl::UniformMatrix4fv(s_view_loc, 1, gl::FALSE, &view.to_cols_array()[0]);
                         gl::UniformMatrix4fv(s_proj_loc, 1, gl::FALSE, &projection.to_cols_array()[0]);
                         gl::Uniform3f(s_sun_loc, sun_dir.x, sun_dir.y, sun_dir.z);
+                        gl::Uniform3f(s_moon_loc, moon_dir.x, moon_dir.y, moon_dir.z);
                         gl::Uniform1f(s_time_loc, total_time);
                         gl::Uniform3f(s_cam_loc, player.pos.x, player.pos.y, player.pos.z);
                         
@@ -268,12 +264,14 @@ fn main() {
                         let m_color_loc = gl::GetUniformLocation(scene_program, CStr::from_bytes_with_nul(b"uBaseColor\0").unwrap().as_ptr());
                         let m_h_loc = gl::GetUniformLocation(scene_program, CStr::from_bytes_with_nul(b"uMaxHeight\0").unwrap().as_ptr());
                         let m_sun_loc = gl::GetUniformLocation(scene_program, CStr::from_bytes_with_nul(b"uSunDir\0").unwrap().as_ptr());
+                        let m_moon_loc = gl::GetUniformLocation(scene_program, CStr::from_bytes_with_nul(b"uMoonDir\0").unwrap().as_ptr());
                         let m_cam_loc = gl::GetUniformLocation(scene_program, CStr::from_bytes_with_nul(b"uCameraPos\0").unwrap().as_ptr());
 
                         gl::UniformMatrix4fv(m_view_loc, 1, gl::FALSE, &view.to_cols_array()[0]);
                         gl::UniformMatrix4fv(m_proj_loc, 1, gl::FALSE, &projection.to_cols_array()[0]);
                         gl::Uniform1f(m_h_loc, MAX_BUILDING_HEIGHT);
                         gl::Uniform3f(m_sun_loc, sun_dir.x, sun_dir.y, sun_dir.z);
+                        gl::Uniform3f(m_moon_loc, moon_dir.x, moon_dir.y, moon_dir.z);
                         gl::Uniform3f(m_cam_loc, player.pos.x, player.pos.y, player.pos.z);
 
                         // Render Buildings

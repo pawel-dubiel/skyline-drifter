@@ -24,6 +24,7 @@ pub const SKY_FRAGMENT_SHADER: &str = r#"
     out vec4 FragColor;
 
     uniform vec3 uSunDir;
+    uniform vec3 uMoonDir; // Explicit moon direction
     uniform float uTime;
     uniform vec3 uCameraPos; // Added camera position for world-space clouds
 
@@ -155,8 +156,8 @@ pub const SKY_FRAGMENT_SHADER: &str = r#"
             float sunGlow = pow(max(sunDot, 0.0), 400.0) * 0.4;
             skyColor += (sunDisk + sunGlow) * sunColor * sunIntensity;
         }
-        vec3 moonDir = normalize(vec3(-uSunDir.x, -uSunDir.y, -uSunDir.z));
-        float moonDot = dot(viewDir, moonDir);
+        // Use explicit moon direction
+        float moonDot = dot(viewDir, uMoonDir);
         float moonDisk = smoothstep(0.997, 0.998, moonDot);
         float moonGlow = pow(max(moonDot, 0.0), 200.0) * 0.15;
         skyColor += (moonDisk + moonGlow) * vec3(0.9, 0.95, 1.0) * max(starOpacity, 0.2);
@@ -298,6 +299,7 @@ pub const SCENE_FRAGMENT_SHADER: &str = r#"
 
     uniform vec3 uBaseColor;
     uniform vec3 uSunDir;
+    uniform vec3 uMoonDir;
     uniform vec3 uCameraPos;
 
     // Random function for window varying
@@ -337,9 +339,8 @@ pub const SCENE_FRAGMENT_SHADER: &str = r#"
         }
         
         // Moon
-        vec3 moonDir = normalize(vec3(-uSunDir.x, -uSunDir.y, -uSunDir.z));
-        if (moonDir.y > 0.0) {
-            float moonFactor = clamp(moonDir.y * 2.0, 0.0, 1.0);
+        if (uMoonDir.y > 0.0) {
+            float moonFactor = clamp(uMoonDir.y * 2.0, 0.0, 1.0);
             moonLightColor = vec3(0.2, 0.3, 0.5) * moonFactor;
         }
 
@@ -370,7 +371,7 @@ pub const SCENE_FRAGMENT_SHADER: &str = r#"
 
         // --- Apply Lighting ---
         float sunDiff = max(dot(normal, uSunDir), 0.0);
-        float moonDiff = max(dot(normal, moonDir), 0.0);
+        float moonDiff = max(dot(normal, uMoonDir), 0.0);
 
         // Add specular for glass during day?
         float spec = 0.0;
